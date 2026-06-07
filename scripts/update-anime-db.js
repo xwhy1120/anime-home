@@ -3,9 +3,9 @@ const fs = require("fs/promises");
 const API_BASE = "https://api.bgm.tv";
 const OUTPUT_FILE = "anime-db.json";
 
-// 第一版先抓排名前 5000 条。
-// 后面你想更大，可以改成 8000、10000，但别太激进。
-const MAX_ITEMS = 5000;
+// 先抓排名前 5000 条。
+// 想更大，可以改成 8000、10000，但别太激进。
+const MAX_ITEMS = 10000;
 const LIMIT = 50;
 const SLEEP_MS = 900;
 
