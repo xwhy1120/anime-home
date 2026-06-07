@@ -5,7 +5,7 @@ const OUTPUT_FILE = "anime-db.json";
 
 // 先抓排名前 5000 条。
 // 想更大，可以改成 8000、10000，但别太激进。
-const MAX_ITEMS = 10000;
+const MAX_ITEMS = 8750;
 const LIMIT = 50;
 const SLEEP_MS = 900;
 
