@@ -1,4 +1,19 @@
 const API_BASE = "https://api.bgm.tv";
+
+const searchInput = document.getElementById("searchInput");
+const searchBtn = document.getElementById("searchBtn");
+const randomBtn = document.getElementById("randomBtn");
+const resultList = document.getElementById("resultList");
+const resultTitle = document.getElementById("resultTitle");
+const resultTip = document.getElementById("resultTip");
+const filterBtns = document.querySelectorAll(".filter-btn");
+
+let currentItems = [];
+let currentMode = "home";
+let localAnimeDB = [];
+
+const STATUS_LIST = ["想看", "在看", "看过", "弃了"];
+
 async function fetchWithTimeout(url, options = {}, timeout = 8000) {
   const controller = new AbortController();
 
@@ -20,18 +35,26 @@ async function fetchWithTimeout(url, options = {}, timeout = 8000) {
   }
 }
 
-const searchInput = document.getElementById("searchInput");
-const searchBtn = document.getElementById("searchBtn");
-const randomBtn = document.getElementById("randomBtn");
-const resultList = document.getElementById("resultList");
-const resultTitle = document.getElementById("resultTitle");
-const resultTip = document.getElementById("resultTip");
-const filterBtns = document.querySelectorAll(".filter-btn");
+async function loadLocalAnimeDB() {
+  try {
+    const res = await fetch("./anime-db.json?v=" + Date.now());
 
-let currentItems = [];
-let currentMode = "home";
+    if (!res.ok) {
+      throw new Error("anime-db.json 加载失败");
+    }
 
-const STATUS_LIST = ["想看", "在看", "看过", "弃了"];
+    localAnimeDB = await res.json();
+
+    if (!Array.isArray(localAnimeDB)) {
+      localAnimeDB = [];
+    }
+
+    console.log("本地番剧库加载成功：", localAnimeDB.length);
+  } catch (err) {
+    console.error("本地番剧库加载失败：", err);
+    localAnimeDB = [];
+  }
+}
 
 function getRecords() {
   return JSON.parse(localStorage.getItem("anime_records_v2") || "{}");
@@ -48,7 +71,7 @@ function getStatus(id) {
 
 function setStatus(id, status) {
   const records = getRecords();
-  const item = currentItems.find(anime => anime.id === id) || records[id];
+  const item = currentItems.find(anime => String(anime.id) === String(id)) || records[id];
 
   if (!item) return;
 
@@ -71,6 +94,22 @@ function setStatus(id, status) {
   }
 }
 
+function cleanText(text) {
+  return String(text || "")
+    .replace(/\r/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function escapeHtml(text) {
+  return String(text || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function normalizeSubject(item) {
   const id = String(item.id);
 
@@ -89,7 +128,7 @@ function normalizeSubject(item) {
 
   const summary = cleanText(item.summary || "暂无简介");
 
-  const score = item.rating?.score ? item.rating.score.toFixed(1) : "暂无评分";
+  const score = item.rating?.score ? Number(item.rating.score).toFixed(1) : "暂无评分";
   const rank = item.rank ? `Rank ${item.rank}` : "暂无排名";
   const date = item.date || "日期未知";
 
@@ -102,24 +141,62 @@ function normalizeSubject(item) {
     score,
     rank,
     date,
-    url: `https://bgm.tv/subject/${id}`
+    url: `https://bgm.tv/subject/${id}`,
+    source: "bangumi"
   };
 }
 
-function cleanText(text) {
-  return String(text)
-    .replace(/\r/g, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+function normalizeLocalItem(item) {
+  return {
+    id: String(item.id),
+    title: item.title || "未命名条目",
+    subTitle: item.subTitle || "",
+    image: item.image || "",
+    summary: item.summary || "暂无简介",
+    score: item.score || "暂无评分",
+    rank: item.rank || "暂无排名",
+    date: item.date || "日期未知",
+    url: item.url || `https://bgm.tv/subject/${item.id}`,
+    source: item.source || "local"
+  };
 }
 
-function escapeHtml(text) {
-  return String(text || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+function searchLocalAnime(keyword) {
+  const key = keyword.trim().toLowerCase();
+
+  if (!key) return [];
+
+  const result = localAnimeDB
+    .map(normalizeLocalItem)
+    .filter(item => {
+      const text = [
+        item.title,
+        item.subTitle,
+        item.summary,
+        item.date,
+        item.score,
+        item.rank
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return text.includes(key);
+    });
+
+  return result.slice(0, 48);
+}
+
+function randomLocalAnime() {
+  if (!localAnimeDB.length) return [];
+
+  const usableList = localAnimeDB
+    .map(normalizeLocalItem)
+    .filter(item => item.title && item.image);
+
+  if (!usableList.length) return [];
+
+  const pick = usableList[Math.floor(Math.random() * usableList.length)];
+  return [pick];
 }
 
 async function bangumiSearch(keyword) {
@@ -149,14 +226,15 @@ async function bangumiSearch(keyword) {
 async function bangumiRandom() {
   const randomOffset = Math.floor(Math.random() * 3600);
 
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `${API_BASE}/v0/subjects?type=2&sort=rank&limit=24&offset=${randomOffset}`,
     {
       method: "GET",
       headers: {
         "Accept": "application/json"
       }
-    }
+    },
+    8000
   );
 
   if (!res.ok) {
@@ -164,9 +242,11 @@ async function bangumiRandom() {
   }
 
   const json = await res.json();
-  const list = (json.data || []).map(normalizeSubject);
+  const list = (json.data || [])
+    .map(normalizeSubject)
+    .filter(item => item.title && item.image);
 
-  if (list.length === 0) {
+  if (!list.length) {
     throw new Error("随机结果为空");
   }
 
@@ -211,7 +291,7 @@ function renderCards(items) {
             ${STATUS_LIST.map(s => `
               <button
                 class="status-btn ${status === s ? "active" : ""}"
-                data-id="${item.id}"
+                data-id="${escapeHtml(item.id)}"
                 data-status="${s}"
               >
                 ${s}
@@ -219,7 +299,7 @@ function renderCards(items) {
             `).join("")}
           </div>
 
-          <a class="open-link" href="${item.url}" target="_blank">打开 Bangumi 页面</a>
+          <a class="open-link" href="${escapeHtml(item.url)}" target="_blank">打开 Bangumi 页面</a>
         </div>
       </article>
     `;
@@ -244,35 +324,61 @@ async function handleSearch() {
 
   currentMode = "search";
   resultTitle.textContent = `搜索：${keyword}`;
-  resultTip.textContent = "按 Bangumi 匹配度排序，中文名优先显示。";
+  resultTip.textContent = "优先使用本地番剧库，搜索和随机不需要 VPN。";
   setLoading("正在搜索番剧……");
 
   try {
-    const list = await bangumiSearch(keyword);
-    renderCards(list);
+    let list = searchLocalAnime(keyword);
 
     if (!list.length) {
-      setError("没搜到结果。可以试试日文名、别名，或者少输入几个字。");
+      try {
+        resultTip.textContent = "本地库没有搜到，正在尝试 Bangumi 在线搜索。";
+        list = await bangumiSearch(keyword);
+      } catch (err) {
+        console.warn("Bangumi 搜索失败，只使用本地库。", err);
+      }
     }
+
+    if (!list.length) {
+      setError("没搜到结果。本地库可能还没收录，可以换个关键词试试，比如少输几个字。");
+      return;
+    }
+
+    renderCards(list);
   } catch (err) {
     console.error(err);
-    setError("搜索失败。可能是网络问题，或者 Bangumi API 暂时访问不了。");
+    setError("搜索失败。请稍后再试。");
   }
 }
 
 async function handleRandom() {
   currentMode = "random";
   resultTitle.textContent = "随机推荐";
-  resultTip.textContent = "这不是固定推荐池，而是从 Bangumi 动画条目里随机抽取。";
+  resultTip.textContent = "优先从本地番剧库随机，不依赖 VPN。";
   setLoading("正在随机抽取番剧……");
 
   try {
-    const list = await bangumiRandom();
+    let list = randomLocalAnime();
+
+    if (!list.length) {
+      try {
+        resultTip.textContent = "本地库为空，正在尝试 Bangumi 在线随机。";
+        list = await bangumiRandom();
+      } catch (err) {
+        console.warn("Bangumi 随机失败，只使用本地库。", err);
+      }
+    }
+
+    if (!list.length) {
+      setError("随机失败。本地番剧库为空，请确认 anime-db.json 已经上传并部署成功。");
+      return;
+    }
+
     renderCards(list);
   } catch (err) {
     console.error(err);
-    setError("随机失败。大概率是当前浏览器或网络访问不了 Bangumi API。请不要在微信/QQ里直接打开，点右上角选择“在浏览器打开”，用 Edge、Chrome、Safari 再试。");
-  }重试
+    setError("随机失败，请稍后再试。");
+  }
 }
 
 function showRecords(filter) {
@@ -324,4 +430,17 @@ filterBtns.forEach(btn => {
   });
 });
 
-renderCards([]);
+async function initApp() {
+  resultTitle.textContent = "正在加载本地番剧库";
+  resultTip.textContent = "正在读取 anime-db.json，请稍等。";
+  setLoading("正在加载本地番剧库……");
+
+  await loadLocalAnimeDB();
+
+  resultTitle.textContent = "开始搜索，或者随机推荐一部";
+  resultTip.textContent = `本地番剧库已加载：${localAnimeDB.length} 条。搜索和随机不需要 VPN。`;
+
+  renderCards([]);
+}
+
+initApp();
