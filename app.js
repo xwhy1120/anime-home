@@ -369,7 +369,7 @@ async function handleSearch() {
 
   currentMode = "search";
   resultTitle.textContent = `搜索：${keyword}`;
-  resultTip.textContent = "优先使用本地番剧库，搜索和随机不需要 VPN。";
+  resultTip.textContent = "优先使用本地番剧库。";
   setLoading("正在搜索番剧……");
 
   try {
@@ -483,7 +483,7 @@ async function initApp() {
   await loadLocalAnimeDB();
 
   resultTitle.textContent = "开始搜索，或者随机推荐一部";
-  resultTip.textContent = `本地番剧库已加载：${localAnimeDB.length} 条。随机推荐不需要 VPN。`;
+  resultTip.textContent = `本地番剧库已加载：${localAnimeDB.length} 条。`;
 
   renderCards([]);
 }
