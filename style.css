@@ -385,3 +385,49 @@ button:hover {
 .card {
   position: relative;
 }
+@media (max-width: 720px) {
+  .search-box {
+    width: 100% !important;
+    height: 52px !important;
+    min-height: 52px !important;
+    max-height: 52px !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    border-radius: 999px !important;
+    padding: 5px !important;
+  }
+
+  .search-box input {
+    height: 42px !important;
+    line-height: 42px !important;
+    padding: 0 12px !important;
+    text-align: left !important;
+    font-size: 14px !important;
+  }
+
+  .search-box button {
+    height: 42px !important;
+    min-width: 72px !important;
+    padding: 0 14px !important;
+    border-radius: 999px !important;
+    font-size: 14px !important;
+    white-space: nowrap !important;
+  }
+}
+@media (max-width: 720px) {
+  .page {
+    padding-top: 28px !important;
+  }
+
+  .hero p {
+    margin-bottom: 18px !important;
+  }
+
+  .actions {
+    margin-top: 18px !important;
+  }
+
+  .result-head {
+    margin-top: 38px !important;
+  }
+}
