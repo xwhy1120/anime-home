@@ -1,4 +1,24 @@
 const API_BASE = "https://api.bgm.tv";
+async function fetchWithTimeout(url, options = {}, timeout = 8000) {
+  const controller = new AbortController();
+
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, timeout);
+
+  try {
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+
+    clearTimeout(timer);
+    return res;
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
+}
 
 const searchInput = document.getElementById("searchInput");
 const searchBtn = document.getElementById("searchBtn");
@@ -103,7 +123,7 @@ function escapeHtml(text) {
 }
 
 async function bangumiSearch(keyword) {
-  const res = await fetch(`${API_BASE}/v0/search/subjects?limit=24&offset=0`, {
+  const res = await fetchWithTimeout(`${API_BASE}/v0/search/subjects?limit=24&offset=0`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -251,8 +271,8 @@ async function handleRandom() {
     renderCards(list);
   } catch (err) {
     console.error(err);
-    setError("随机失败。可以再点一次，或者稍后重试。");
-  }
+    setError("随机失败。大概率是当前浏览器或网络访问不了 Bangumi API。请不要在微信/QQ里直接打开，点右上角选择“在浏览器打开”，用 Edge、Chrome、Safari 再试。");
+  }重试
 }
 
 function showRecords(filter) {
