@@ -1,0 +1,31 @@
+name: Update Anime Database
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: write
+
+jobs:
+  update-db:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Generate anime database
+        run: node scripts/update-anime-db.js
+
+      - name: Commit anime-db.json
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update anime database"
+          file_pattern: anime-db.json
