@@ -490,3 +490,16 @@ h1 {
     height: 360px;
   }
 }
+.back-v2-link {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 9999;
+  padding: 10px 16px;
+  border-radius: 999px;
+  color: white;
+  text-decoration: none;
+  font-weight: 700;
+  background: linear-gradient(135deg, #fb5d8d, #9b5cff);
+  box-shadow: 0 12px 30px rgba(155, 92, 255, 0.28);
+}
