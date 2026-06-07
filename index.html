@@ -4,76 +4,61 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>随机番剧推荐 V2</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=21" />
 </head>
 <body>
-  <main class="page">
-    <section class="hero">
-      <div class="top-links">
-        <a href="./v1/">V1</a>
-        <a href="https://bgm.tv/" target="_blank" rel="noreferrer">Bangumi</a>
-      </div>
-
-      <div class="logo">番</div>
+  <main class="page-shell">
+    <section class="hero-panel">
+      <div class="brand-logo" aria-hidden="true">Ani</div>
       <h1>随机番剧推荐</h1>
-      <p>搜索、随机、记录你的补番清单</p>
+      <p class="subtitle">搜索、随机、记录你的补番清单</p>
 
-      <div class="search-shell">
-        <input id="searchInput" type="text" autocomplete="off" placeholder="搜索番剧，例如：孤独摇滚、药屋少女、芙莉莲" />
-        <button id="searchBtn">搜索</button>
+      <form id="searchForm" class="search-panel" autocomplete="off">
+        <input id="searchInput" type="text" placeholder="搜索番剧，例如：孤独摇滚、药屋少女、芙莉莲" />
+        <button class="primary-btn search-submit" type="submit">搜索</button>
+      </form>
+
+      <div class="source-switch" role="group" aria-label="数据源切换">
+        <button class="source-btn active" type="button" data-source="online">在线</button>
+        <button class="source-btn" type="button" data-source="local">本地库</button>
       </div>
 
-      <div class="source-toggle" aria-label="数据源切换">
-        <button class="source-btn active" data-source="online">在线</button>
-        <button class="source-btn" data-source="local">本地库</button>
-      </div>
-
-      <div class="quick-actions">
-        <button id="randomBtn" class="primary-btn">随机一部</button>
-
-        <label class="switch">
-          <input id="skipWatchedInput" type="checkbox" checked />
-          <span></span>
-          <b>跳过看过和弃了</b>
+      <div class="action-row">
+        <button id="randomBtn" class="primary-btn" type="button">随机一部</button>
+        <label class="soft-check">
+          <input id="skipWatched" type="checkbox" checked />
+          <span>跳过看过和弃了</span>
         </label>
       </div>
 
-      <div class="filters">
-        <button class="filter-btn active" data-filter="全部">全部记录</button>
-        <button class="filter-btn" data-filter="想看">想看</button>
-        <button class="filter-btn" data-filter="在看">在看</button>
-        <button class="filter-btn" data-filter="看过">看过</button>
-        <button class="filter-btn" data-filter="弃了">弃了</button>
+      <div class="filter-row" role="group" aria-label="记录筛选">
+        <button class="filter-btn active" type="button" data-filter="全部">全部记录</button>
+        <button class="filter-btn" type="button" data-filter="想看">想看</button>
+        <button class="filter-btn" type="button" data-filter="在看">在看</button>
+        <button class="filter-btn" type="button" data-filter="看过">看过</button>
+        <button class="filter-btn" type="button" data-filter="弃了">弃了</button>
       </div>
     </section>
 
-    <section class="result-head">
-      <div>
-        <h2 id="resultTitle">准备好了</h2>
-        <p id="resultTip">输入番名搜索，或者随机邂逅一部。</p>
+    <section class="content-panel">
+      <div class="section-head">
+        <div>
+          <h2 id="resultTitle">开始搜索，或者随机推荐一部</h2>
+          <p id="resultTip">当前数据源：在线</p>
+        </div>
+        <button id="clearViewBtn" class="ghost-btn" type="button">清空显示</button>
       </div>
-      <button id="clearBtn" class="ghost-btn">清空结果</button>
+
+      <section id="resultList" class="grid"></section>
     </section>
 
-    <section id="resultList" class="grid"></section>
+    <footer class="footer-links">
+      <a href="./v1/">V1 旧版</a>
+      <span>·</span>
+      <a href="https://bgm.tv/anime" target="_blank" rel="noreferrer">Bangumi</a>
+    </footer>
   </main>
 
-  <template id="cardSkeleton">
-    <article class="card skeleton-card">
-      <div class="cover-wrap shimmer"></div>
-      <div class="body">
-        <div class="line shimmer"></div>
-        <div class="line short shimmer"></div>
-        <div class="chips">
-          <span class="chip shimmer"></span>
-          <span class="chip shimmer"></span>
-          <span class="chip shimmer"></span>
-        </div>
-        <div class="text-block shimmer"></div>
-      </div>
-    </article>
-  </template>
-
-  <script src="app.js"></script>
+  <script src="app.js?v=21"></script>
 </body>
 </html>

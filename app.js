@@ -1,63 +1,61 @@
 const API_BASE = "https://api.bgm.tv";
-const LOCAL_DB_URL = "./anime-db.json";
 
+const searchForm = document.getElementById("searchForm");
 const searchInput = document.getElementById("searchInput");
-const searchBtn = document.getElementById("searchBtn");
 const randomBtn = document.getElementById("randomBtn");
+const skipWatched = document.getElementById("skipWatched");
+const clearViewBtn = document.getElementById("clearViewBtn");
 const resultList = document.getElementById("resultList");
 const resultTitle = document.getElementById("resultTitle");
 const resultTip = document.getElementById("resultTip");
 const filterBtns = document.querySelectorAll(".filter-btn");
 const sourceBtns = document.querySelectorAll(".source-btn");
-const clearBtn = document.getElementById("clearBtn");
-const skipWatchedInput = document.getElementById("skipWatchedInput");
-const cardSkeleton = document.getElementById("cardSkeleton");
-
-const STATUS_LIST = ["想看", "在看", "看过", "弃了"];
-const RECORD_KEY = "anime_records_v3";
-const SOURCE_KEY = "anime_source_mode_v1";
 
 let currentItems = [];
 let currentMode = "home";
-let activeController = null;
-let sourceMode = localStorage.getItem(SOURCE_KEY) || "online";
+let dataSource = localStorage.getItem("anime_source_v21") || "online";
 let localAnimeDB = [];
-let localDBLoaded = false;
-let localDBLoading = null;
+let localLoaded = false;
+
+const STATUS_LIST = ["想看", "在看", "看过", "弃了"];
+
+function fetchWithTimeout(url, options = {}, timeout = 9000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timer));
+}
 
 function getRecords() {
-  return JSON.parse(localStorage.getItem(RECORD_KEY) || "{}");
+  return JSON.parse(localStorage.getItem("anime_records_v2") || "{}");
 }
 
 function saveRecords(records) {
-  localStorage.setItem(RECORD_KEY, JSON.stringify(records));
+  localStorage.setItem("anime_records_v2", JSON.stringify(records));
 }
 
 function getStatus(id) {
-  return getRecords()[id]?.status || "未标记";
+  const records = getRecords();
+  return records[String(id)]?.status || "未标记";
 }
 
 function setStatus(id, status) {
+  id = String(id);
   const records = getRecords();
-  const item = currentItems.find(anime => String(anime.id) === String(id)) || records[id];
-
+  const item = currentItems.find(anime => String(anime.id) === id) || records[id];
   if (!item) return;
 
   if (getStatus(id) === status) {
     delete records[id];
   } else {
-    records[id] = {
-      ...item,
-      status,
-      updatedAt: Date.now()
-    };
+    records[id] = { ...item, id, status, updatedAt: Date.now() };
   }
 
   saveRecords(records);
 
   if (currentMode === "records") {
-    const filter = document.querySelector(".filter-btn.active")?.dataset.filter || "全部";
-    showRecords(filter);
+    showRecords(document.querySelector(".filter-btn.active")?.dataset.filter || "全部");
   } else {
     renderCards(currentItems);
   }
@@ -85,14 +83,7 @@ function normalizeSubject(item) {
   const jpName = item.name && item.name.trim();
   const title = cnName || jpName || "未命名条目";
   const subTitle = cnName && jpName && cnName !== jpName ? jpName : "";
-
-  const image =
-    item.images?.large ||
-    item.images?.common ||
-    item.images?.medium ||
-    item.images?.small ||
-    "";
-
+  const image = item.images?.large || item.images?.common || item.images?.medium || item.images?.small || "";
   const score = item.rating?.score ? Number(item.rating.score).toFixed(1) : "暂无评分";
   const rank = item.rank ? `Rank ${item.rank}` : "暂无排名";
 
@@ -111,74 +102,36 @@ function normalizeSubject(item) {
 }
 
 function normalizeLocalItem(item) {
-  if (!item) return null;
-
+  const id = String(item.id);
   return {
-    id: String(item.id || ""),
-    title: item.title || item.name_cn || item.name || "未命名条目",
-    subTitle: item.subTitle || item.name || "",
-    image: item.image || item.images?.large || item.images?.common || item.images?.medium || "",
-    summary: cleanText(item.summary || "暂无简介"),
-    score: item.score || (item.rating?.score ? Number(item.rating.score).toFixed(1) : "暂无评分"),
+    id,
+    title: item.title || "未命名条目",
+    subTitle: item.subTitle || "",
+    image: item.image || "",
+    summary: item.summary || "暂无简介",
+    score: item.score || "暂无评分",
     rank: item.rank || "暂无排名",
     date: item.date || "日期未知",
-    url: item.url || (item.id ? `https://bgm.tv/subject/${item.id}` : "https://bgm.tv/"),
+    url: item.url || `https://bgm.tv/subject/${id}`,
     source: item.source || "local"
   };
 }
 
-async function fetchWithTimeout(url, options = {}, timeout = 9000) {
-  if (activeController) {
-    activeController.abort();
-  }
-
-  const controller = new AbortController();
-  activeController = controller;
-
-  const timer = setTimeout(() => controller.abort(), timeout);
-
-  try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-      headers: {
-        "Accept": "application/json",
-        ...(options.headers || {})
-      }
-    });
-
-    clearTimeout(timer);
-    return response;
-  } catch (error) {
-    clearTimeout(timer);
-    throw error;
-  }
+function isSkippedByRecord(item) {
+  if (!skipWatched.checked) return false;
+  const status = getStatus(item.id);
+  return status === "看过" || status === "弃了";
 }
 
 async function loadLocalAnimeDB() {
-  if (localDBLoaded) return localAnimeDB;
-  if (localDBLoading) return localDBLoading;
+  if (localLoaded) return;
 
-  localDBLoading = fetch(`${LOCAL_DB_URL}?v=${Date.now()}`)
-    .then(response => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    })
-    .then(json => {
-      localAnimeDB = Array.isArray(json) ? json.map(normalizeLocalItem).filter(Boolean) : [];
-      localDBLoaded = true;
-      return localAnimeDB;
-    })
-    .catch(error => {
-      localAnimeDB = [];
-      localDBLoaded = false;
-      throw error;
-    })
-    .finally(() => {
-      localDBLoading = null;
-    });
+  const res = await fetch(`./anime-db.json?v=${Date.now()}`);
+  if (!res.ok) throw new Error("本地库加载失败");
 
-  return localDBLoading;
+  const json = await res.json();
+  localAnimeDB = Array.isArray(json) ? json.map(normalizeLocalItem) : [];
+  localLoaded = true;
 }
 
 function searchLocalAnime(keyword) {
@@ -186,113 +139,63 @@ function searchLocalAnime(keyword) {
   if (!key) return [];
 
   return localAnimeDB
-    .filter(item => {
-      const text = [item.title, item.subTitle, item.summary, item.date, item.score, item.rank]
-        .join(" ")
-        .toLowerCase();
-      return text.includes(key);
-    })
-    .slice(0, 40);
+    .filter(item => [item.title, item.subTitle, item.summary, item.date, item.score, item.rank].join(" ").toLowerCase().includes(key))
+    .slice(0, 48);
 }
 
 function randomLocalAnime() {
-  if (!localAnimeDB.length) return [];
-
-  let pool = localAnimeDB.filter(item => item.title && item.image);
-  pool = filterRandomCandidates(pool);
-
-  if (!pool.length) {
-    pool = localAnimeDB.filter(item => item.title && item.image);
-  }
-
-  if (!pool.length) return [];
-
-  return [pool[Math.floor(Math.random() * pool.length)]];
+  const usable = localAnimeDB.filter(item => item.title && item.image && !isSkippedByRecord(item));
+  if (!usable.length) return [];
+  return [usable[Math.floor(Math.random() * usable.length)]];
 }
 
-async function bangumiSearch(keyword) {
-  const response = await fetchWithTimeout(`${API_BASE}/v0/search/subjects?limit=30&offset=0`, {
+async function searchOnline(keyword) {
+  const res = await fetchWithTimeout(`${API_BASE}/v0/search/subjects?limit=36&offset=0`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      keyword,
-      sort: "match",
-      filter: {
-        type: [2]
-      }
-    })
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify({ keyword, sort: "match", filter: { type: [2] } })
   });
 
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-
-  const json = await response.json();
-  return (json.data || []).map(normalizeSubject).filter(item => item.title);
+  if (!res.ok) throw new Error(`搜索失败：${res.status}`);
+  const json = await res.json();
+  return (json.data || []).map(normalizeSubject);
 }
 
-async function bangumiRandom() {
+async function randomOnline() {
   const maxOffset = 9000;
-  const attempts = 6;
-  let backup = [];
 
-  for (let i = 0; i < attempts; i++) {
+  for (let attempt = 0; attempt < 8; attempt++) {
     const offset = Math.floor(Math.random() * maxOffset);
-    const response = await fetchWithTimeout(
-      `${API_BASE}/v0/subjects?type=2&sort=rank&limit=24&offset=${offset}`,
-      { method: "GET" },
-      9000
-    );
+    const res = await fetchWithTimeout(`${API_BASE}/v0/subjects?type=2&sort=rank&limit=24&offset=${offset}`, {
+      method: "GET",
+      headers: { "Accept": "application/json" }
+    });
 
-    if (!response.ok) continue;
+    if (!res.ok) continue;
 
-    const json = await response.json();
-    const list = (json.data || []).map(normalizeSubject).filter(item => item.title && item.image);
+    const json = await res.json();
+    const list = (json.data || [])
+      .map(normalizeSubject)
+      .filter(item => item.title && item.image && !isSkippedByRecord(item));
 
-    if (list.length) {
-      backup = list;
-      const filtered = filterRandomCandidates(list);
-      const pool = filtered.length ? filtered : list;
-      return [pool[Math.floor(Math.random() * pool.length)]];
-    }
+    if (list.length) return [list[Math.floor(Math.random() * list.length)]];
   }
 
-  if (backup.length) {
-    return [backup[Math.floor(Math.random() * backup.length)]];
-  }
-
-  return [];
-}
-
-function filterRandomCandidates(list) {
-  if (!skipWatchedInput.checked) return list;
-
-  return list.filter(item => {
-    const status = getStatus(item.id);
-    return status !== "看过" && status !== "弃了";
-  });
-}
-
-function renderSkeleton(count = 6) {
-  const html = Array.from({ length: count }, () => cardSkeleton.innerHTML).join("");
-  resultList.innerHTML = html;
+  throw new Error("随机结果为空");
 }
 
 function renderCards(items) {
   currentItems = items;
 
   if (!items.length) {
-    resultList.innerHTML = `<div class="empty">没有内容。</div>`;
+    resultList.innerHTML = `<div class="empty">这里还没有内容。可以搜索番剧，或者随机一部。</div>`;
     return;
   }
 
   resultList.innerHTML = items.map(item => {
     const status = getStatus(item.id);
-
     const imageHtml = item.image
-      ? `<img class="cover" src="${escapeHtml(item.image)}" alt="${escapeHtml(item.title)}" loading="lazy" onload="this.classList.add('loaded')" onerror="this.closest('.cover-wrap').classList.add('no-cover')">`
+      ? `<img class="cover" src="${escapeHtml(item.image)}" alt="${escapeHtml(item.title)}">`
       : `<div class="cover"></div>`;
 
     return `
@@ -301,19 +204,15 @@ function renderCards(items) {
           ${imageHtml}
           <div class="status-badge">${status}</div>
         </div>
-
         <div class="body">
           <h3 class="title">${escapeHtml(item.title)}</h3>
           <div class="jp-title">${escapeHtml(item.subTitle)}</div>
-
           <div class="meta">
             <span>${escapeHtml(item.date)}</span>
             <span>${escapeHtml(item.score)}</span>
             <span>${escapeHtml(item.rank)}</span>
           </div>
-
           <p class="summary">${escapeHtml(item.summary)}</p>
-
           <div class="status-row">
             ${STATUS_LIST.map(s => `
               <button class="status-btn ${status === s ? "active" : ""}" data-id="${escapeHtml(item.id)}" data-status="${s}">
@@ -321,161 +220,141 @@ function renderCards(items) {
               </button>
             `).join("")}
           </div>
-
-          <a class="open-link" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">打开详情</a>
+          <a class="open-link" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">打开条目页面</a>
         </div>
       </article>
     `;
   }).join("");
 }
 
+function setLoading(text) {
+  resultList.innerHTML = `
+    <div class="loading">${text}</div>
+    <div class="skeleton-card"></div>
+  `;
+}
+
 function setError(text) {
-  resultList.innerHTML = `<div class="error">${escapeHtml(text)}</div>`;
+  resultList.innerHTML = `<div class="error">${text}</div>`;
 }
 
 function updateSourceUI() {
-  sourceBtns.forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.source === sourceMode);
-  });
-
-  if (currentMode === "home") {
-    resultTip.textContent = sourceMode === "online"
-      ? "输入番名搜索，或者随机邂逅一部。"
-      : "输入番名搜索，或者从本地库随机一部。";
-  }
-}
-
-async function setSourceMode(mode) {
-  sourceMode = mode;
-  localStorage.setItem(SOURCE_KEY, sourceMode);
-  updateSourceUI();
-
-  if (sourceMode === "local" && !localDBLoaded) {
-    resultTitle.textContent = "正在加载本地库";
-    resultTip.textContent = "稍等一下。";
-    renderSkeleton(3);
-
-    try {
-      await loadLocalAnimeDB();
-      resultTitle.textContent = "准备好了";
-      resultTip.textContent = `本地库已加载 ${localAnimeDB.length} 条。`;
-      resultList.innerHTML = "";
-    } catch (error) {
-      console.error(error);
-      resultTitle.textContent = "本地库";
-      setError("本地库加载失败。请确认 anime-db.json 已经放在网站根目录。");
-    }
-  }
+  sourceBtns.forEach(btn => btn.classList.toggle("active", btn.dataset.source === dataSource));
+  resultTip.textContent = `当前数据源：${dataSource === "online" ? "在线" : "本地库"}`;
 }
 
 async function handleSearch() {
   const keyword = searchInput.value.trim();
-
   if (!keyword) {
-    setError("先输入番名。");
+    setError("先输入番名，例如：孤独摇滚、药屋少女、芙莉莲。");
     return;
   }
 
   currentMode = "search";
   resultTitle.textContent = `搜索：${keyword}`;
-  resultTip.textContent = sourceMode === "online" ? "正在寻找相关条目。" : "正在本地库中查找。";
-  renderSkeleton(8);
+  setLoading("正在搜索……");
 
   try {
-    const list = sourceMode === "online"
-      ? await bangumiSearch(keyword)
-      : (await loadLocalAnimeDB(), searchLocalAnime(keyword));
+    let list = [];
+    if (dataSource === "online") {
+      list = await searchOnline(keyword);
+    } else {
+      await loadLocalAnimeDB();
+      list = searchLocalAnime(keyword);
+    }
 
     if (!list.length) {
-      setError("没有搜到结果，换个名字试试。");
+      setError("没有找到结果，换个关键词试试。");
       return;
     }
 
-    resultTip.textContent = `找到 ${list.length} 个结果。`;
+    updateSourceUI();
     renderCards(list);
-  } catch (error) {
-    console.error(error);
-    setError(sourceMode === "online" ? "连接超时或服务暂时不可用，稍后再试。" : "本地库加载失败。");
+  } catch (err) {
+    console.error(err);
+    setError("搜索失败，可以切换数据源后再试。");
   }
 }
 
 async function handleRandom() {
   currentMode = "random";
   resultTitle.textContent = "随机推荐";
-  resultTip.textContent = "正在抽取。";
-  renderSkeleton(1);
+  setLoading("正在随机抽取……");
 
   try {
-    const list = sourceMode === "online"
-      ? await bangumiRandom()
-      : (await loadLocalAnimeDB(), randomLocalAnime());
+    let list = [];
+    if (dataSource === "online") {
+      list = await randomOnline();
+    } else {
+      await loadLocalAnimeDB();
+      list = randomLocalAnime();
+    }
 
     if (!list.length) {
-      setError("这次没有抽到，重新点一次。");
+      setError("没有可随机的条目，换个数据源试试。");
       return;
     }
 
-    resultTip.textContent = "抽到了这一部。";
+    updateSourceUI();
     renderCards(list);
-  } catch (error) {
-    console.error(error);
-    setError(sourceMode === "online" ? "连接超时或服务暂时不可用，稍后再试。" : "本地库加载失败。");
+  } catch (err) {
+    console.error(err);
+    setError("随机失败，可以切换数据源后再试。");
   }
 }
 
 function showRecords(filter) {
   currentMode = "records";
-
   const records = getRecords();
   let list = Object.values(records).sort((a, b) => b.updatedAt - a.updatedAt);
 
-  if (filter !== "全部") {
-    list = list.filter(item => item.status === filter);
-  }
+  if (filter !== "全部") list = list.filter(item => item.status === filter);
 
-  resultTitle.textContent = filter === "全部" ? "我的记录" : `我的${filter}`;
-  resultTip.textContent = list.length ? `共 ${list.length} 条。` : "还没有记录。";
-
-  if (!list.length) {
-    resultList.innerHTML = `<div class="empty">${filter === "全部" ? "你还没有标记任何番剧。" : `你还没有标记“${filter}”的番剧。`}</div>`;
-    return;
-  }
-
+  resultTitle.textContent = filter === "全部" ? "我的全部记录" : `我的${filter}`;
+  resultTip.textContent = "记录保存在当前浏览器。";
   renderCards(list);
+
+  if (!list.length) setError(filter === "全部" ? "你还没有标记任何番剧。" : `你还没有标记“${filter}”的番剧。`);
 }
 
-function clearResults() {
-  currentMode = "home";
-  currentItems = [];
-  resultTitle.textContent = "准备好了";
-  resultTip.textContent = sourceMode === "online"
-    ? "输入番名搜索，或者随机邂逅一部。"
-    : "输入番名搜索，或者从本地库随机一部。";
-  resultList.innerHTML = "";
-}
-
-searchBtn.addEventListener("click", handleSearch);
-
-searchInput.addEventListener("keydown", event => {
-  if (event.key === "Enter") {
-    handleSearch();
-  }
+searchForm.addEventListener("submit", e => {
+  e.preventDefault();
+  handleSearch();
 });
 
 randomBtn.addEventListener("click", handleRandom);
-
-clearBtn.addEventListener("click", clearResults);
+clearViewBtn.addEventListener("click", () => {
+  currentMode = "home";
+  resultTitle.textContent = "开始搜索，或者随机推荐一部";
+  updateSourceUI();
+  renderCards([]);
+});
 
 sourceBtns.forEach(btn => {
-  btn.addEventListener("click", () => {
-    setSourceMode(btn.dataset.source);
+  btn.addEventListener("click", async () => {
+    dataSource = btn.dataset.source;
+    localStorage.setItem("anime_source_v21", dataSource);
+    updateSourceUI();
+    resultTitle.textContent = "开始搜索，或者随机推荐一部";
+    renderCards([]);
+
+    if (dataSource === "local") {
+      setLoading("正在准备本地库……");
+      try {
+        await loadLocalAnimeDB();
+        resultTip.textContent = `当前数据源：本地库，共 ${localAnimeDB.length} 条`;
+        renderCards([]);
+      } catch (err) {
+        console.error(err);
+        setError("本地库加载失败，请确认 anime-db.json 在根目录。");
+      }
+    }
   });
 });
 
-resultList.addEventListener("click", event => {
-  const btn = event.target.closest(".status-btn");
+resultList.addEventListener("click", e => {
+  const btn = e.target.closest(".status-btn");
   if (!btn) return;
-
   setStatus(btn.dataset.id, btn.dataset.status);
 });
 
@@ -488,4 +367,4 @@ filterBtns.forEach(btn => {
 });
 
 updateSourceUI();
-clearResults();
+renderCards([]);
