@@ -223,6 +223,51 @@ async function bangumiSearch(keyword) {
   return (json.data || []).map(normalizeSubject);
 }
 
+async function loadLocalAnimeDB() {
+  try {
+    const res = await fetch("./anime-db.json?v=" + Date.now());
+
+    if (!res.ok) {
+      throw new Error("anime-db.json 加载失败");
+    }
+
+    localAnimeDB = await res.json();
+
+    if (!Array.isArray(localAnimeDB)) {
+      localAnimeDB = [];
+    }
+
+    console.log("本地番剧库加载成功：", localAnimeDB.length);
+  } catch (err) {
+    console.error("本地番剧库加载失败：", err);
+    localAnimeDB = [];
+  }
+}
+
+function randomLocalAnime() {
+  if (!localAnimeDB.length) return [];
+
+  const usableList = localAnimeDB.filter(item => {
+    return item && item.id && item.title && item.image;
+  });
+
+  if (!usableList.length) return [];
+
+  const pick = usableList[Math.floor(Math.random() * usableList.length)];
+
+  return [{
+    id: String(pick.id),
+    title: pick.title || "未命名条目",
+    subTitle: pick.subTitle || "",
+    image: pick.image || "",
+    summary: pick.summary || "暂无简介",
+    score: pick.score || "暂无评分",
+    rank: pick.rank || "暂无排名",
+    date: pick.date || "日期未知",
+    url: pick.url || `https://bgm.tv/subject/${pick.id}`,
+    source: "local"
+  }];
+}
 async function bangumiRandom() {
   const randomOffset = Math.floor(Math.random() * 3600);
 
@@ -354,7 +399,7 @@ async function handleSearch() {
 async function handleRandom() {
   currentMode = "random";
   resultTitle.textContent = "随机推荐";
-  resultTip.textContent = "优先从本地番剧库随机，不依赖 VPN。";
+  resultTip.textContent = "优先从本地番剧库随机。";
   setLoading("正在随机抽取番剧……");
 
   try {
@@ -438,7 +483,7 @@ async function initApp() {
   await loadLocalAnimeDB();
 
   resultTitle.textContent = "开始搜索，或者随机推荐一部";
-  resultTip.textContent = `本地番剧库已加载：${localAnimeDB.length} 条。搜索和随机不需要 VPN。`;
+  resultTip.textContent = `本地番剧库已加载：${localAnimeDB.length} 条。随机推荐不需要 VPN。`;
 
   renderCards([]);
 }
